@@ -10,7 +10,7 @@ Word2Vec-based text retrieval over Genius lyrics dataset.
          (2) cosine similarity between mean vectors (vectorized & fast)
 - Prints Top-5 and Bottom-5 (with Title/Artist/Score) for demo queries
 """
-
+import os
 import re
 import sys
 import numpy as np
@@ -275,7 +275,8 @@ if __name__ == "__main__":
     tr = TextRetrieval()
 
     # 1) Load and clean local Genius CSV
-    csv_name = "genius-clean-with-title-artist-5000.csv"
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    csv_name = os.path.join(BASE_DIR, "clean-with-title-artist-all.csv")
     tr.read_and_preprocess_genius(csv_name)
     print(f"[info] num_docs = {tr.dataset.shape[0]}")
 
