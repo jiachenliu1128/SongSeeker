@@ -70,7 +70,7 @@ def search_songs(query, tr, dataset):
         print(f"Score: {relevance_docs[i]:.2f} -> Title: {dataset.iloc[i]['title']}")
 
 try:
-    dataset = pd.read_csv('genius-clean-with-title-artist-5000.csv')
+    dataset = pd.read_csv('clean-with-title-artist-all.csv')
 
     tr = TextRetrieval()
 
@@ -90,7 +90,7 @@ try:
         search_songs(query, tr, dataset)
 
 except FileNotFoundError:
-    print("\n[ERROR] The file 'genius-clean-with-title-artist-5000.csv' was not found.")
+    print("\n[ERROR] The file 'clean-with-title-artist-all.csv' was not found.")
     print("Please make sure the script and the CSV file are in the same directory.")
 except Exception as e:
     print(f"An unexpected error occurred: {e}")
