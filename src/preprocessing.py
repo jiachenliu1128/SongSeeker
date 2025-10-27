@@ -15,6 +15,7 @@ processed_path = config['data']['processed']
 df = pd.read_csv(
     raw_path,
     sep=',',
+    # nrows=5000,
     quotechar='"',
     quoting=csv.QUOTE_MINIMAL,
     doublequote=True,
