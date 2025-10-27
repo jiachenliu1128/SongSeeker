@@ -1,8 +1,10 @@
 data:
   # raw: data/raw/song_lyrics.csv
   # processed: data/processed/clean-with-title-artist-all.csv
-  raw: sample_data/raw/song_lyrics.csv # This is for testing purpose
-  processed: sample_data/processed/genius-clean-with-title-artist-5000.csv # This is for testing purpose
+  # raw: sample_data/raw/song_lyrics.csv # This is for testing purpose
+  # processed: sample_data/processed/genius-clean-with-title-artist-5000.csv # This is for testing purpose
+  raw: sample_data/raw/song_lyrics.csv       
+  processed: sample_data/processed/demo_lyrics.csv
 
 w2v:
   model: glove-wiki-gigaword-100
