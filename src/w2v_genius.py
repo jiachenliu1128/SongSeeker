@@ -2,7 +2,6 @@
 """
 Word2Vec-based text retrieval over Genius lyrics dataset.
 
-- Reads: genius-clean-with-title-artist-5000.csv
 - Cleans text: lowercase, remove HTML, digits, punctuation, collapse spaces, remove stopwords
 - Loads embeddings: prefer local word2vec/GloVe(w2v format), fallback to gensim.downloader
 - Caches per-document in-vocab word vectors & mean vectors
@@ -17,6 +16,14 @@ import numpy as np
 import pandas as pd
 import nltk
 from nltk.corpus import stopwords
+import yaml
+
+# Read config
+with open("config.yaml", 'r') as f:
+    config = yaml.safe_load(f)
+DATA_PATH = config['data']['processed']
+W2V_MODEL = config['w2v']['model']
+
 
 # =========================
 # Config: embeddings source
@@ -26,7 +33,7 @@ from nltk.corpus import stopwords
 #   - glove.6B.100d.word2vec.txt (binary=False)  # after conversion
 LOCAL_VEC_PATH = None            # e.g., "embeddings/GoogleNews-vectors-negative300.bin"
 LOCAL_VEC_BINARY = True
-ONLINE_MODEL_NAME = "glove-wiki-gigaword-100"  # used only if LOCAL_VEC_PATH is None
+ONLINE_MODEL_NAME = W2V_MODEL  # used only if LOCAL_VEC_PATH is None
 
 # =========================
 # Helper functions
@@ -275,9 +282,7 @@ if __name__ == "__main__":
     tr = TextRetrieval()
 
     # 1) Load and clean local Genius CSV
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    csv_name = os.path.join(BASE_DIR, "clean-with-title-artist-all.csv")
-    tr.read_and_preprocess_genius(csv_name)
+    tr.read_and_preprocess_genius(DATA_PATH)
     print(f"[info] num_docs = {tr.dataset.shape[0]}")
 
     # 2) Load word embeddings

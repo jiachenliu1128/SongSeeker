@@ -1,13 +1,19 @@
 import sys, re, csv
 import pandas as pd
+import yaml
 
 try:
     csv.field_size_limit(sys.maxsize)
 except OverflowError:
     csv.field_size_limit(2**31 - 1)
 
+with open("config.yaml", 'r') as f:
+    config = yaml.safe_load(f)
+raw_path = config['data']['raw']
+processed_path = config['data']['processed']
+
 df = pd.read_csv(
-    'song_lyrics.csv',
+    raw_path,
     sep=',',
     quotechar='"',
     quoting=csv.QUOTE_MINIMAL,
@@ -49,6 +55,6 @@ after_dedup = len(df_keep)
 print(f'kept length>=20: {after_len_filter}/{before_filter}')
 print(f'after dedup: {after_dedup}/{after_len_filter}')
 
-out_path = 'clean-with-title-artist-all.csv'
+out_path = processed_path
 df_keep.to_csv(out_path, index=False)
 print('generated:', out_path, 'shape:', df_keep.shape)
