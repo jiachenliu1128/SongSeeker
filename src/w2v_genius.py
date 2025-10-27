@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 Word2Vec-based text retrieval over Genius lyrics dataset.
+ALSO includes a utility to convert GloVe to Word2Vec format.
 
-- Cleans text: lowercase, remove HTML, digits, punctuation, collapse spaces, remove stopwords
-- Loads embeddings: prefer local word2vec/GloVe(w2v format), fallback to gensim.downloader
-- Caches per-document in-vocab word vectors & mean vectors
-- Scores: (1) average log-likelihood over pairwise dot products with sigmoid
-         (2) cosine similarity between mean vectors (vectorized & fast)
-- Prints Top-5 and Bottom-5 (with Title/Artist/Score) for demo queries
+Default usage (search):
+    python w2v_genius.py
+
+Conversion usage:
+    python w2v_genius.py convert glove.6B.100d.txt glove.6B.100d.word2vec.txt
 """
 import os
 import re
@@ -17,6 +17,9 @@ import pandas as pd
 import nltk
 from nltk.corpus import stopwords
 import yaml
+from gensim.scripts.glove2word2vec import glove2word2vec
+from gensim.models import KeyedVectors
+
 
 # Read config
 with open("config.yaml", 'r') as f:
@@ -31,9 +34,9 @@ W2V_MODEL = config['w2v']['model']
 # If you have a local file, set this path. Examples:
 #   - GoogleNews-vectors-negative300.bin (binary=True)
 #   - glove.6B.100d.word2vec.txt (binary=False)  # after conversion
-LOCAL_VEC_PATH = None            # e.g., "embeddings/GoogleNews-vectors-negative300.bin"
+LOCAL_VEC_PATH = None       # e.g., "embeddings/GoogleNews-vectors-negative300.bin"
 LOCAL_VEC_BINARY = True
-ONLINE_MODEL_NAME = W2V_MODEL  # used only if LOCAL_VEC_PATH is None
+ONLINE_MODEL_NAME = W2V_MODEL   # used only if LOCAL_VEC_PATH is None
 
 # =========================
 # Helper functions
@@ -72,20 +75,20 @@ class TextRetrieval():
     stop_words = set()
 
     # Dataset
-    dataset = None          # pd.DataFrame with column index 2 for cleaned text
-    meta = None             # dict with "title", "artist" lists for pretty print
+    dataset = None      # pd.DataFrame with column index 2 for cleaned text
+    meta = None         # dict with "title", "artist" lists for pretty print
 
     # Embeddings
-    kv = None               # gensim KeyedVectors
+    kv = None           # gensim KeyedVectors
     dim = None
 
     # Caches
-    docs_tokens = None      # list[list[str]]
-    docs_vecs = None        # list[np.ndarray], shape=(m_i, dim)
-    docs_mean = None        # np.ndarray, shape=(N, dim)
+    docs_tokens = None  # list[list[str]]
+    docs_vecs = None    # list[np.ndarray], shape=(m_i, dim)
+    docs_mean = None    # np.ndarray, shape=(N, dim)
 
     # Scoring
-    alpha = 1.0             # scaling for avg-LL
+    alpha = 1.0         # scaling for avg-LL
 
     def __init__(self):
         ensure_stopwords()
@@ -111,9 +114,9 @@ class TextRetrieval():
         artist_col = lower_cols.get("artist")
         # lyrics/text/content: try common names; fallback to the last column
         lyrics_col = (lower_cols.get("lyrics")
-                      or lower_cols.get("text")
-                      or lower_cols.get("content")
-                      or list(df.columns)[-1])
+                        or lower_cols.get("text")
+                        or lower_cols.get("content")
+                        or list(df.columns)[-1])
 
         # Build concatenated raw text: [title] + [artist] + [lyrics]
         pieces = []
@@ -145,7 +148,6 @@ class TextRetrieval():
         """
         Prefer local vectors; fallback to gensim.downloader online model.
         """
-        from gensim.models import KeyedVectors
         try:
             if LOCAL_VEC_PATH:
                 print(f"[W2V] loading local vectors: {LOCAL_VEC_PATH} (binary={LOCAL_VEC_BINARY})")
@@ -277,7 +279,23 @@ def print_top_bottom_with_meta(scores: np.ndarray, meta: dict, k: int = 5):
         print(" ", row(i))
 
 # ---------- Main ----------
-if __name__ == "__main__":
+
+def main_convert():
+    """Wrapper for GloVe conversion utility."""
+    if len(sys.argv) != 4: # script.py convert <in> <out>
+        print("Usage: python w2v_genius.py convert <glove_input.txt> <word2vec_output.txt>")
+        sys.exit(1)
+    glove_input_file = sys.argv[2]
+    word2vec_output_file = sys.argv[3]
+    try:
+        glove2word2vec(glove_input_file, word2vec_output_file)
+        print(f"[ok] converted {glove_input_file} -> {word2vec_output_file}")
+    except Exception as e:
+        print(f"[error] conversion failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+def main_search():
+    """Main logic for running text retrieval."""
     # Instantiate
     tr = TextRetrieval()
 
@@ -314,3 +332,12 @@ if __name__ == "__main__":
         print()
 
     print("[done] w2v_genius finished.")
+
+
+if __name__ == "__main__":
+    # Check if the user wants to run the 'convert' utility
+    if len(sys.argv) > 1 and sys.argv[1] == "convert":
+        main_convert()
+    else:
+        # Otherwise, run the default 'search' main
+        main_search()
