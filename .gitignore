@@ -1,6 +1,4 @@
 /data/**
-!/data/processed_sample/**
-
 __pycache__/
 .DS_Store
 .env
