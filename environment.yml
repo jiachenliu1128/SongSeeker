@@ -1,0 +1,8 @@
+name: SongSeeker
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - ipykernel
+prefix: /Users/jiachenliu/miniconda3/envs/SongSeeker
