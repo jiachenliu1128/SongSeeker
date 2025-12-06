@@ -12,9 +12,9 @@ try:
     nltk.data.find('corpora/stopwords')
 except LookupError:
     nltk.download('stopwords')
-
 manual_stopwords = set(stopwords.words('english'))
 
+# Text Retrieval class implementing BM25
 class TextRetrieval():
     punctuations = ""
     stop_words = set()
