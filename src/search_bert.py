@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from sentence_transformers import SentenceTransformer
 import faiss
+import yaml
 
 
 class SongBiEncoderSearcher:
@@ -20,19 +21,15 @@ class SongBiEncoderSearcher:
     def __init__(
         self,
         model_name: str = "all-MiniLM-L6-v2",
-        emb_path: str = "song_embeddings.npy",
-        id_path: str = "song_ids.npy",
-        index_path: str = "song_index.faiss",
-        device: Optional[str] = None,
-        use_faiss: bool = True,
+        emb_path: str = "./cache/bert_song_embeddings.npy",
+        id_path: str = "./cache/bert_song_ids.npy"
     ):
         self.model_name = model_name
         self.emb_path = emb_path
         self.id_path = id_path
-        self.index_path = index_path
-        self.use_faiss = use_faiss
 
-        self.model = SentenceTransformer(model_name, device=device)
+        self.model = SentenceTransformer(model_name)
+        print(f"Model running on device: {self.model.device}")
 
         # Lazy-loaded
         self.doc_embs: Optional[np.ndarray] = None  # (N, d)
@@ -49,7 +46,6 @@ class SongBiEncoderSearcher:
     def build_from_csv(
         self,
         csv_path: str,
-        id_col: Optional[str] = None,
         text_cols: Optional[List[str]] = None,
         chunksize: int = 2048,
         batch_size: int = 64,
@@ -68,7 +64,9 @@ class SongBiEncoderSearcher:
 
         current_index = 0  # running row index across chunks
 
+        print(f"Building embeddings from CSV: {csv_path}")
         for df in pd.read_csv(csv_path, chunksize=chunksize, sep=sep, encoding=encoding):
+            print(f"  Processing rows {current_index} to {current_index + len(df) - 1}...")
             # Check text columns
             missing = [c for c in text_cols if c not in df.columns]
             if missing:
@@ -77,7 +75,10 @@ class SongBiEncoderSearcher:
             # Text for embedding
             text_df = df[text_cols].fillna("").astype(str)
             texts = text_df.apply(" - ".join, axis=1).tolist()
-            ids = df[id_col].tolist()
+            
+            # IDs
+            ids = list(range(current_index, current_index + len(df)))
+            current_index += len(df)
 
             # Encode lyrics/title/artist
             embs = self.model.encode(
@@ -91,7 +92,7 @@ class SongBiEncoderSearcher:
             all_ids.extend(ids)
 
         # Finish stacking
-        doc_embs = np.vstack(all_embs).astype("float32")  # (N, d)
+        doc_embs = np.vstack(all_embs).astype("float32")
         song_ids = np.array(all_ids)
 
         # Normalize for cosine similarity
@@ -104,14 +105,6 @@ class SongBiEncoderSearcher:
         # Store in memory
         self.doc_embs = doc_embs
         self.song_ids = song_ids
-
-        # Optional FAISS index
-        if self.use_faiss:
-            d = doc_embs.shape[1]
-            index = faiss.IndexFlatIP(d)
-            index.add(doc_embs)
-            faiss.write_index(index, self.index_path)
-            self.index = index
             
             
             
@@ -129,13 +122,6 @@ class SongBiEncoderSearcher:
             if not os.path.exists(self.id_path):
                 raise FileNotFoundError(f"ID file not found: {self.id_path}")
             self.song_ids = np.load(self.id_path)
-
-    def load_faiss_index(self):
-        if not self.use_faiss:
-            raise RuntimeError("use_faiss=False; no index to load.")
-        if not os.path.exists(self.index_path):
-            raise FileNotFoundError(f"Index file not found: {self.index_path}")
-        self.index = faiss.read_index(self.index_path)
         
         
         
@@ -166,38 +152,19 @@ class SongBiEncoderSearcher:
     
     
     
+if __name__ == "__main__":
+    # Load configuration
+    with open("config.yaml", 'r') as f:
+        config = yaml.safe_load(f)
+    data_path = config['data']['processed']
     
-
-    # ------------------------------------------------------------------
-    # 2) Optional: top-k using FAISS (fast) – still available
-    # ------------------------------------------------------------------
-    def top_k(self, query: str, k: int = 10):
-        """
-        Return top-k results using FAISS (if use_faiss=True).
-        Returns list of dicts: [{"song_id": ..., "score": ...}, ...]
-        """
-        if not self.use_faiss:
-            raise RuntimeError("FAISS index disabled (use_faiss=False).")
-        if self.index is None:
-            self.load_faiss_index()
-        self._ensure_embs_loaded()
-
-        q_emb = self.model.encode([query], convert_to_numpy=True).astype("float32")
-        faiss.normalize_L2(q_emb)
-
-        scores, idxs = self.index.search(q_emb, k)
-        scores = scores[0]
-        idxs = idxs[0]
-
-        results = []
-        for s, i in zip(scores, idxs):
-            if i == -1:
-                continue
-            results.append(
-                {
-                    "song_id": int(self.song_ids[i]),
-                    "score": float(s),
-                    "index": int(i),
-                }
-            )
-        return results
+    # Example usage
+    searcher = SongBiEncoderSearcher()
+    searcher.build_from_csv(data_path)
+    
+    query = "love and heartbreak"
+    scores = searcher.full_scores(query)
+    top5_indices = np.argsort(scores)[-5:][::-1]
+    print(f"\n--- Top 5 Songs for query: '{query}' ---")
+    for i in top5_indices:
+        print(f"Score: {scores[i]:.4f} -> Index: {i}")
