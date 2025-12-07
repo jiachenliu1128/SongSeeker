@@ -99,6 +99,10 @@ class SongBiEncoderSearcher:
         faiss.normalize_L2(doc_embs)
 
         # Save to disk
+        if not os.path.exists(os.path.dirname(self.emb_path)):
+            os.makedirs(os.path.dirname(self.emb_path))
+        if not os.path.exists(os.path.dirname(self.id_path)):
+            os.makedirs(os.path.dirname(self.id_path))
         np.save(self.emb_path, doc_embs)
         np.save(self.id_path, song_ids)
 
