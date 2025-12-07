@@ -8,9 +8,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, accuracy_score
 from sklearn.preprocessing import StandardScaler
 
-import bm25_search
-import w2v_genius
-import bert_search
+import search_bm25
+import search_w2v
+import search_bert
 
 QUERIES = {
     "q1": "love and heartbreak",
@@ -41,19 +41,19 @@ def prepare_features(labeled_data_path, config):
     documents = df[text_col].fillna("").tolist()
 
     print("\n--- 2. Initializing BM25 ---")
-    bm25 = bm25_search.TextRetrieval()
+    bm25 = search_bm25.TextRetrieval()
     bm25.processed_docs = bm25.preprocess_docs(documents)
     bm25.build_vocabulary()
     bm25.build_doc_term_matrix()
 
     print("\n--- 3. Initializing Word2Vec ---")
-    w2v = w2v_genius.TextRetrieval()
+    w2v = search_w2v.TextRetrieval()
     w2v.dataset = pd.DataFrame({2: documents})
     w2v.load_embeddings()
     w2v.build_doc_W2V_cache()
 
     print("\n--- 4. Initializing BERT ---")
-    bert = bert_search.BERTSearch()
+    bert = search_bert.BERTSearch()
     bert.encode_corpus(documents)
 
     print("\n--- 5. Generating Training Features (for all queries) ---")
