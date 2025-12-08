@@ -57,11 +57,13 @@ class LearnedRanker:
         # --- Initialize BM25 ---
         print("[Init] Building BM25 cache...")
         bm25 = search_bm25.TextRetrieval()
-        if not bm25.load_cache("cache"):
+        if not bm25.load_cache("cache/bm25"):
             bm25.processed_docs = bm25.preprocess_docs(self.documents)
             bm25.build_vocabulary()
             bm25.build_doc_term_matrix()
-            bm25.save_cache("cache")
+            bm25.save_cache("cache/bm25")
+        else:
+            print("[Init] BM25 cache loaded.")
 
         # --- Initialize W2V ---
         print("[Init] Building Word2Vec cache (cosine mode only)...")
@@ -71,6 +73,8 @@ class LearnedRanker:
         if not w2v.load_cache("cache/w2v", expect_full_mats=False):
             w2v.build_doc_W2V_cache(max_doc_tokens=200, keep_full_mats=False)
             w2v.save_cache("cache/w2v")
+        else:
+            print("[Init] W2V cache loaded.")
 
         # --- Initialize BERT ---
         print("[Init] Initializing BERT bi-encoder...")
@@ -78,6 +82,8 @@ class LearnedRanker:
         if not bert.load_cache("cache/bert"):
             bert.build_from_csv(csv_path, text_cols=[self.text_col])
             bert.save_cache("cache/bert")
+        else:
+            print("[Init] BERT cache loaded.")
 
         # --- Load trained logistic regression model & scaler ---
         model_path = os.path.join(model_dir, "logreg_model.pkl")

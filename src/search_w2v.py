@@ -293,6 +293,7 @@ class TextRetrieval():
     
     
     def save_cache(self, cache_dir: str):
+        print(f"Saving cache to {cache_dir}...")
         os.makedirs(cache_dir, exist_ok=True)
         # mean vectors
         np.save(os.path.join(cache_dir, "w2v_docs_mean.npy"), self.docs_mean)
