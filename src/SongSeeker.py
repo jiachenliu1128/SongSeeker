@@ -18,9 +18,9 @@ import numpy as np
 import pandas as pd
 import joblib
 
-from . import search_bm25
-from . import search_w2v
-from . import search_bert
+import search_bm25
+import search_w2v
+import search_bert
 
 
 
