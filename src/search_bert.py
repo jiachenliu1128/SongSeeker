@@ -6,6 +6,10 @@ from sentence_transformers import SentenceTransformer
 import faiss
 import yaml
 
+with open("config.yaml", 'r') as f:
+        config = yaml.safe_load(f)
+MODEL_NAME = config['bert']['model']
+
 
 class SongBiEncoderSearcher:
     """
@@ -20,15 +24,15 @@ class SongBiEncoderSearcher:
 
     def __init__(
         self,
-        model_name: str = "all-MiniLM-L6-v2",
+        # model_name: str = "all-MiniLM-L6-v2",
         # emb_path: str = "./cache/bert_song_embeddings.npy",
         # id_path: str = "./cache/bert_song_ids.npy"
     ):
-        self.model_name = model_name
+        self.model_name = MODEL_NAME
         # self.emb_path = emb_path
         # self.id_path = id_path
 
-        self.model = SentenceTransformer(model_name)
+        self.model = SentenceTransformer(self.model_name)
         print(f"Model running on device: {self.model.device}")
 
         # Lazy-loaded
@@ -187,7 +191,9 @@ class SongBiEncoderSearcher:
         path = os.path.join(cache_dir, "bert_doc_embeddings.npy")
         if not os.path.exists(path):
             return False
+        print(f"Loading cache from {cache_dir}...")
         self.doc_embs = np.load(path)
+        print(f"{self.doc_embs.shape[0]} embeddings loaded from cache.")
         return True
             
             
@@ -237,16 +243,12 @@ class SongBiEncoderSearcher:
     
     
 if __name__ == "__main__":
-    # Load configuration
-    with open("config.yaml", 'r') as f:
-        config = yaml.safe_load(f)
-    model = config['bert']['model']
     
     # Paths
-    data_path = "data/processed/clean-with-title-artist-1000000.csv"
+    data_path = "sample_data/processed/genius-clean-with-title-artist-10000.csv"
     
     # Example usage
-    searcher = SongBiEncoderSearcher(model_name=model)
+    searcher = SongBiEncoderSearcher()
     searcher.build_from_csv(data_path)
     searcher.save_cache("cache/bert")
     

@@ -14,9 +14,9 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
 
 try:
-    import search_bm25
-    import search_w2v
-    import search_bert
+    from . import search_bm25
+    from . import search_w2v
+    from . import search_bert
 except ImportError as e:
     print(f"Error importing search modules: {e}")
 

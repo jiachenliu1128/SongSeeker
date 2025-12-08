@@ -1,4 +1,6 @@
+data
 /data/**
+cache
 /cache/**
 __pycache__/
 .DS_Store

@@ -28,7 +28,7 @@ with open("config.yaml", 'r') as f:
 W2V_MODEL = config['w2v']['model']
 
 # Data paths
-DATA_PATH = "data/processed/clean-with-title-artist-1000000.csv"
+DATA_PATH = "sample_data/processed/genius-clean-with-title-artist-10000.csv"
 
 
 # =========================
@@ -109,6 +109,7 @@ class TextRetrieval():
         - dataset: with column index 2 as cleaned text (to be compatible with prior code)
         - meta:    title/artist lists for reporting
         """
+        print("[genius] reading CSV:", csv_path)
         df = pd.read_csv(csv_path)
 
         # tolerant column autodetection
@@ -300,6 +301,9 @@ class TextRetrieval():
         # tokens (optional but often useful)
         with open(os.path.join(cache_dir, "w2v_docs_tokens.pkl"), "wb") as f:
             pickle.dump(self.docs_tokens, f)
+        # key_to_index mapping
+        with open(os.path.join(cache_dir, "w2v_kv_index.pkl"), "wb") as f:
+            pickle.dump(self.kv, f)
         # full matrices (only if you used keep_full_mats=True)
         if self.docs_vecs is not None:
             with open(os.path.join(cache_dir, "w2v_docs_vecs.pkl"), "wb") as f:
@@ -308,16 +312,21 @@ class TextRetrieval():
     def load_cache(self, cache_dir: str, expect_full_mats: bool = False):
         mean_path = os.path.join(cache_dir, "w2v_docs_mean.npy")
         tokens_path = os.path.join(cache_dir, "w2v_docs_tokens.pkl")
+        kv_index_path = os.path.join(cache_dir, "w2v_kv_index.pkl")
         vecs_path = os.path.join(cache_dir, "w2v_docs_vecs.pkl")
 
         # Check existence
-        if not (os.path.exists(mean_path) and os.path.exists(tokens_path)):
+        if not (os.path.exists(mean_path) and os.path.exists(tokens_path) and os.path.exists(kv_index_path)):
             return False
 
+        print(f"[W2V] Loading cache from {cache_dir}...")
         # Load mean vectors and tokens
         self.docs_mean = np.load(mean_path)
         with open(tokens_path, "rb") as f:
             self.docs_tokens = pickle.load(f)
+        with open(kv_index_path, "rb") as f:
+            self.kv = pickle.load(f)
+        print(f"{len(self.docs_tokens)} documents loaded from cache.")
 
         # Load full matrices if expected
         if expect_full_mats:

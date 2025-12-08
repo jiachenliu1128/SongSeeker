@@ -125,9 +125,7 @@ class TextRetrieval():
                 {
                     "processed_docs": self.processed_docs,
                     "vocab": self.vocab,
-                    # "idf": self.idf,
-                    # "doc_len": self.doc_len,
-                    # "avgdl": self.avgdl,
+                    "vocab_index": self.vocab_index,
                 },
                 f,
             )
@@ -142,13 +140,14 @@ class TextRetrieval():
         if not (os.path.exists(meta_path) and os.path.exists(dtm_path)):
             return False  # cache miss
 
+        print(f"Cache found. Loading from {cache_dir}...                        ")
         with open(meta_path, "rb") as f:
             meta = pickle.load(f)
+            print(f"{len(meta)} items loaded from cache.")
+            print(f"Document count: {len(meta['processed_docs'])}")
         self.processed_docs = meta["processed_docs"]
         self.vocab = meta["vocab"]
-        # self.idf = meta["idf"]
-        # self.doc_len = meta["doc_len"]
-        # self.avgdl = meta["avgdl"]
+        self.vocab_index = meta["vocab_index"]
 
         self.doc_term_matrix = sp.load_npz(dtm_path)
         return True  # cache hit
@@ -171,7 +170,7 @@ def search_songs(query, tr, dataset):
 if __name__ == "__main__":
     try:
         # data_path
-        data_path = "data/processed/clean-with-title-artist-1000000.csv"
+        data_path = "sample_data/processed/genius-clean-with-title-artist-10000.csv"
         
         # Load dataset
         dataset = pd.read_csv(data_path)

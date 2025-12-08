@@ -6,9 +6,9 @@ try:
 except OverflowError:
     csv.field_size_limit(2**31 - 1)
 
-nrows = 1000000
+nrows = 10000
 raw_path = 'data/raw/song_lyrics.csv'
-processed_path = f'data/processed/clean-with-title-artist-{nrows}.csv'
+processed_path = f'sample_data/processed/genius-clean-with-title-artist-{nrows}.csv'
 
 df = pd.read_csv(
     raw_path,

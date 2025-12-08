@@ -18,9 +18,9 @@ import numpy as np
 import pandas as pd
 import joblib
 
-import search_bm25
-import search_w2v
-import search_bert
+from . import search_bm25
+from . import search_w2v
+from . import search_bert
 
 
 
@@ -57,32 +57,32 @@ class LearnedRanker:
 
         # --- Initialize BM25 ---
         print("[Init] Building BM25 cache...")
-        bm25 = search_bm25.TextRetrieval()
-        if not bm25.load_cache("cache/bm25"):
-            bm25.processed_docs = bm25.preprocess_docs(self.documents)
-            bm25.build_vocabulary()
-            bm25.build_doc_term_matrix()
-            bm25.save_cache("cache/bm25")
+        self.bm25 = search_bm25.TextRetrieval()
+        if not self.bm25.load_cache("cache/bm25"):
+            self.bm25.processed_docs = self.bm25.preprocess_docs(self.documents)
+            self.bm25.build_vocabulary()
+            self.bm25.build_doc_term_matrix()
+            self.bm25.save_cache("cache/bm25")
         else:
             print("[Init] BM25 cache loaded.")
 
         # --- Initialize W2V ---
         print("[Init] Building Word2Vec cache (cosine mode only)...")
-        w2v = search_w2v.TextRetrieval()
-        w2v.dataset = pd.DataFrame({2: self.documents})
-        w2v.load_embeddings()
-        if not w2v.load_cache("cache/w2v", expect_full_mats=False):
-            w2v.build_doc_W2V_cache(max_doc_tokens=200, keep_full_mats=False)
-            w2v.save_cache("cache/w2v")
+        self.w2v = search_w2v.TextRetrieval()
+        self.w2v.dataset = pd.DataFrame({2: self.documents})
+        if not self.w2v.load_cache("cache/w2v", expect_full_mats=False):
+            self.w2v.load_embeddings()
+            self.w2v.build_doc_W2V_cache(max_doc_tokens=200, keep_full_mats=False)
+            self.w2v.save_cache("cache/w2v")
         else:
             print("[Init] W2V cache loaded.")
 
         # --- Initialize BERT ---
         print("[Init] Initializing BERT bi-encoder...")
-        bert = search_bert.SongBiEncoderSearcher()
-        if not bert.load_cache("cache/bert"):
-            bert.build_from_csv(csv_path, text_cols=[self.text_col])
-            bert.save_cache("cache/bert")
+        self.bert = search_bert.SongBiEncoderSearcher()
+        if not self.bert.load_cache("cache/bert"):
+            self.bert.build_from_csv(csv_path, text_cols=[self.text_col])
+            self.bert.save_cache("cache/bert")
         else:
             print("[Init] BERT cache loaded.")
 
@@ -204,7 +204,7 @@ def main():
     )
     args = parser.parse_args()
 
-    data_path = "data/processed/clean-with-title-artist-1000000.csv"
+    data_path = "sample_data/processed/genius-clean-with-title-artist-10000.csv"
     ranker = LearnedRanker(data_path)
 
     print("\nType a query to get ranked results (Ctrl+C or empty line to exit).")
