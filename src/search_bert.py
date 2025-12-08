@@ -43,6 +43,72 @@ class SongBiEncoderSearcher:
     # ------------------------------------------------------------------
     # Build embeddings (and optionally FAISS index) from CSV
     # ------------------------------------------------------------------
+    # def build_from_csv(
+    #     self,
+    #     csv_path: str,
+    #     text_cols: Optional[List[str]] = None,
+    #     chunksize: int = 2048,
+    #     batch_size: int = 64,
+    #     sep: str = ",",
+    #     encoding: str = "utf-8",
+    # ):
+    #     """
+    #     Build embeddings from CSV.
+    #     If id_col is None, use row index as document ID.
+    #     """
+    #     if text_cols is None:
+    #         text_cols = ["title", "artist", "lyrics"]
+
+    #     all_embs = []
+    #     all_ids = []
+
+    #     current_index = 0  # running row index across chunks
+
+    #     print(f"Building embeddings from CSV: {csv_path}")
+    #     for df in pd.read_csv(csv_path, chunksize=chunksize, sep=sep, encoding=encoding):
+    #         print(f"  Processing rows {current_index} to {current_index + len(df) - 1}...")
+    #         # Check text columns
+    #         missing = [c for c in text_cols if c not in df.columns]
+    #         if missing:
+    #             raise ValueError(f"Missing columns in CSV: {missing}")
+
+    #         # Text for embedding
+    #         text_df = df[text_cols].fillna("").astype(str)
+    #         texts = text_df.apply(" - ".join, axis=1).tolist()
+            
+    #         # IDs
+    #         ids = list(range(current_index, current_index + len(df)))
+    #         current_index += len(df)
+
+    #         # Encode lyrics/title/artist
+    #         embs = self.model.encode(
+    #             texts,
+    #             batch_size=batch_size,
+    #             show_progress_bar=False,
+    #             convert_to_numpy=True,
+    #         ).astype("float32")
+
+    #         all_embs.append(embs)
+    #         all_ids.extend(ids)
+
+    #     # Finish stacking
+    #     doc_embs = np.vstack(all_embs).astype("float32")
+    #     # song_ids = np.array(all_ids)
+
+    #     # Normalize for cosine similarity
+    #     faiss.normalize_L2(doc_embs)
+
+    #     # Save to disk
+    #     # if not os.path.exists(os.path.dirname(self.emb_path)):
+    #     #     os.makedirs(os.path.dirname(self.emb_path))
+    #     # if not os.path.exists(os.path.dirname(self.id_path)):
+    #     #     os.makedirs(os.path.dirname(self.id_path))
+    #     # np.save(self.emb_path, doc_embs)
+    #     # np.save(self.id_path, song_ids)
+
+    #     # Store in memory
+    #     self.doc_embs = doc_embs
+    #     # self.song_ids = song_ids
     def build_from_csv(
         self,
         csv_path: str,
@@ -52,35 +118,48 @@ class SongBiEncoderSearcher:
         sep: str = ",",
         encoding: str = "utf-8",
     ):
-        """
-        Build embeddings from CSV.
-        If id_col is None, use row index as document ID.
-        """
         if text_cols is None:
             text_cols = ["title", "artist", "lyrics"]
 
-        all_embs = []
-        all_ids = []
-
-        current_index = 0  # running row index across chunks
-
         print(f"Building embeddings from CSV: {csv_path}")
+
+        # 1) Count total rows (lightweight, just metadata)
+        total_rows = 0
+        for df in pd.read_csv(csv_path, chunksize=chunksize, sep=sep, encoding=encoding):
+            total_rows += len(df)
+        print(f"  Total rows: {total_rows}")
+
+        # 2) Get embedding dimension from a tiny probe
+        probe_df = next(pd.read_csv(csv_path, chunksize=1, sep=sep, encoding=encoding))
+        missing = [c for c in text_cols if c not in probe_df.columns]
+        if missing:
+            raise ValueError(f"Missing columns in CSV: {missing}")
+        probe_text = probe_df[text_cols].fillna("").astype(str).apply(" - ".join, axis=1).tolist()
+        probe_emb = self.model.encode(
+            probe_text,
+            batch_size=1,
+            show_progress_bar=False,
+            convert_to_numpy=True,
+        ).astype("float32")
+        dim = probe_emb.shape[1]
+
+        # 3) Preallocate big embedding matrix
+        doc_embs = np.empty((total_rows, dim), dtype="float32")
+
+        # 4) Second pass: fill doc_embs chunk by chunk
+        write_pos = 0
+        current_index = 0
         for df in pd.read_csv(csv_path, chunksize=chunksize, sep=sep, encoding=encoding):
             print(f"  Processing rows {current_index} to {current_index + len(df) - 1}...")
-            # Check text columns
+            current_index += len(df)
+
             missing = [c for c in text_cols if c not in df.columns]
             if missing:
                 raise ValueError(f"Missing columns in CSV: {missing}")
 
-            # Text for embedding
             text_df = df[text_cols].fillna("").astype(str)
             texts = text_df.apply(" - ".join, axis=1).tolist()
-            
-            # IDs
-            ids = list(range(current_index, current_index + len(df)))
-            current_index += len(df)
 
-            # Encode lyrics/title/artist
             embs = self.model.encode(
                 texts,
                 batch_size=batch_size,
@@ -88,27 +167,14 @@ class SongBiEncoderSearcher:
                 convert_to_numpy=True,
             ).astype("float32")
 
-            all_embs.append(embs)
-            all_ids.extend(ids)
+            n = len(embs)
+            doc_embs[write_pos : write_pos + n] = embs
+            write_pos += n
 
-        # Finish stacking
-        doc_embs = np.vstack(all_embs).astype("float32")
-        # song_ids = np.array(all_ids)
-
-        # Normalize for cosine similarity
+        # 5) Normalize for cosine similarity (in-place)
         faiss.normalize_L2(doc_embs)
 
-        # Save to disk
-        # if not os.path.exists(os.path.dirname(self.emb_path)):
-        #     os.makedirs(os.path.dirname(self.emb_path))
-        # if not os.path.exists(os.path.dirname(self.id_path)):
-        #     os.makedirs(os.path.dirname(self.id_path))
-        # np.save(self.emb_path, doc_embs)
-        # np.save(self.id_path, song_ids)
-
-        # Store in memory
         self.doc_embs = doc_embs
-        # self.song_ids = song_ids
         
         
         
@@ -182,6 +248,7 @@ if __name__ == "__main__":
     # Example usage
     searcher = SongBiEncoderSearcher(model_name=model)
     searcher.build_from_csv(data_path)
+    searcher.save_cache("cache/bert")
     
     query = "love and heartbreak"
     scores = searcher.full_scores(query)

@@ -171,7 +171,7 @@ def search_songs(query, tr, dataset):
 if __name__ == "__main__":
     try:
         # data_path
-        data_path = "sample_data/processed/genius-clean-with-title-artist-5000.csv"
+        data_path = "data/processed/clean-with-title-artist-1000000.csv"
         
         # Load dataset
         dataset = pd.read_csv(data_path)
@@ -183,14 +183,15 @@ if __name__ == "__main__":
         print("Building vocabulary and document-term matrix...")
         tr.build_vocabulary()
         tr.build_doc_term_matrix()
+        tr.save_cache("cache/bm25")
         print("Setup complete. You can now start searching.")
 
-        while True:
-            query = input("\nEnter your search query (or type 'quit' to exit): ")
-            if query.lower() == 'quit':
-                print("Exiting...")
-                break
-            search_songs(query, tr, dataset)
+        # while True:
+        #     query = input("\nEnter your search query (or type 'quit' to exit): ")
+        #     if query.lower() == 'quit':
+        #         print("Exiting...")
+        #         break
+        #     search_songs(query, tr, dataset)
 
     except FileNotFoundError:
         print(f"\n[ERROR] The file '{data_path}' was not found.")

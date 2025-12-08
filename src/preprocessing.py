@@ -6,7 +6,7 @@ try:
 except OverflowError:
     csv.field_size_limit(2**31 - 1)
 
-nrows = 1000000
+nrows = 100000
 raw_path = 'data/raw/song_lyrics.csv'
 processed_path = f'data/processed/clean-with-title-artist-{nrows}.csv'
 

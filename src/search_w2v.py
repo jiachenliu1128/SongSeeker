@@ -293,7 +293,7 @@ class TextRetrieval():
     
     
     def save_cache(self, cache_dir: str):
-        print(f"Saving cache to {cache_dir}...")
+        print(f"[W2V] Saving cache to {cache_dir}...")
         os.makedirs(cache_dir, exist_ok=True)
         # mean vectors
         np.save(os.path.join(cache_dir, "w2v_docs_mean.npy"), self.docs_mean)
@@ -388,6 +388,7 @@ def main_search():
     # For large corpora, avoid storing full per-document matrices to save memory.
     # If you really need avg-LL scoring, call with keep_full_mats=True instead.
     tr.build_doc_W2V_cache(max_doc_tokens=200, keep_full_mats=False)
+    tr.save_cache("cache/w2v")
 
     # 4) Run some demo queries (lyrics-y)
     queries = [

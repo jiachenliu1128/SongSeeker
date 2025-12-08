@@ -23,6 +23,7 @@ import search_w2v
 import search_bert
 
 
+
 class LearnedRanker:
     def __init__(self, csv_path: str, model_dir: str = "models"):
         """
