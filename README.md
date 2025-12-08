@@ -57,4 +57,7 @@ Output:
     predicted relevance score (between 0 and 1) for each (query, song) pair
 
 
+TODO:
+1. Train and evaluation split?
+2. Final songseeker
 
