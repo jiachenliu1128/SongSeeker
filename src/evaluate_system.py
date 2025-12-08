@@ -51,6 +51,39 @@ def calculate_metrics(predicted_indices, true_indices, k=5):
     hits = sum([1 for idx in top_k if idx in true_indices])
     return hits / k
 
+def calculate_average_precision(predicted_indices, true_indices):
+    """Calculate Average Precision across all retrieved results."""
+    if not true_indices:
+        return 0.0
+    
+    ap = 0.0
+    num_hits = 0
+    
+    for i, idx in enumerate(predicted_indices):
+        if idx in true_indices:
+            num_hits += 1
+            ap += num_hits / (i + 1)  # Precision at position i+1
+    
+    return ap / len(true_indices)
+
+def calculate_ndcg(predicted_indices, true_indices, k=10):
+    """Calculate Normalized Discounted Cumulative Gain@k."""
+    if not true_indices:
+        return 0.0
+    
+    # DCG: sum of relevance / log2(position + 1)
+    dcg = 0.0
+    for i, idx in enumerate(predicted_indices[:k]):
+        if idx in true_indices:
+            dcg += 1.0 / np.log2(i + 2)  # position is i+1, so i+2 in log
+    
+    # Ideal DCG: perfect ranking would have all relevant items at top
+    idcg = sum([1.0 / np.log2(i + 2) for i in range(min(k, len(true_indices)))])
+    
+    return dcg / idcg if idcg > 0 else 0.0
+
+
+
 def load_test_subset(csv_path):
     if not os.path.exists(csv_path):
         print(f"File not found: {csv_path}")
@@ -167,6 +200,7 @@ if __name__ == "__main__":
     if df_test is not None:
         pipeline = SongSeekerPipeline(df_test, csv_path=temp_csv_path)
         precisions = []
+        average_precisions = []
 
         print("\n=== Running Evaluation on Test Set (1000 songs) ===")
         for q_id, query in QUERY_MAP.items():
@@ -181,22 +215,25 @@ if __name__ == "__main__":
                     continue
 
                 # Metrics
-                pred_indices = results.index[:5].tolist()
-                p_at_5 = calculate_metrics(pred_indices, true_ids, k=5)
-                precisions.append(p_at_5)
+                pred_indices = results.index.tolist()
+                p_at_10 = calculate_metrics(pred_indices, true_ids, k=10)
+                ap = calculate_average_precision(pred_indices, true_ids)
+                ndcg_10 = calculate_ndcg(pred_indices, true_ids, k=10)
+                average_precisions.append(ap)
 
                 top_track = results.iloc[0]
                 print(f"  Query: {query}")
                 print(f"  Top Result: {top_track['title']} (Score: {top_track['final_score']:.4f})")
-                print(f"  Precision@5: {p_at_5:.2f}")
+                print(f"  Precision@10: {p_at_10:.4f}  |  NDCG@10: {ndcg_10:.4f}")
+                print(f"  Average Precision: {ap:.4f}")
 
             except Exception as e:
                 print(f"  Error processing {q_id}: {e}")
 
-        if precisions:
-            avg_map = sum(precisions) / len(precisions)
+        if average_precisions:
+            map_score = sum(average_precisions) / len(average_precisions)
             print(f"\n=== Final Results (Test Set) ===")
-            print(f"MAP (Hybrid): {avg_map:.4f}")
+            print(f"Mean Average Precision (MAP): {map_score:.4f}")
             
         if os.path.exists(temp_csv_path):
             os.remove(temp_csv_path)
