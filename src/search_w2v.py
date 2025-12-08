@@ -412,10 +412,39 @@ def main_search():
     print("[done] w2v_genius finished.")
 
 
+# Adapter Class for Evaluate System (Required for Pipeline)
+class W2VSearcher(TextRetrieval):
+    def __init__(self, dataframe):
+        """Initialize adapter with pipeline data."""
+        super().__init__()
+
+        # Prepare Data
+        df = dataframe.copy()
+        if 'lyrics' not in df.columns:
+            print("[W2V] Warning: Missing 'lyrics' column.")
+            df['lyrics'] = ""
+
+        punct = self.punctuations
+        sw = self.stop_words
+        df[2] = df['lyrics'].astype(str).apply(lambda t: clean_text(t, punct, sw))
+
+        self.dataset = df
+
+        # Init Model & Cache
+        self.load_embeddings()
+        # Ensure we build the cache so searching works immediately
+        self.build_doc_W2V_cache(max_doc_tokens=200, keep_full_mats=False)
+
+    def search(self, query):
+        """Return batch cosine similarity scores."""
+        # This calls the method from the parent TextRetrieval class
+        return self.w2v_cosine_scores_batch(query)
+
 if __name__ == "__main__":
-    # Check if the user wants to run the 'convert' utility
+    # Check if run as a script directly
     if len(sys.argv) > 1 and sys.argv[1] == "convert":
         main_convert()
+    elif len(sys.argv) > 1 and sys.argv[1] == "adapter_test":
+        print("W2VSearcher adapter is defined.")
     else:
-        # Otherwise, run the default 'search' main
         main_search()

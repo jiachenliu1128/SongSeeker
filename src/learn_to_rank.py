@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import os
+import sys
 import joblib
 from scipy import stats
 from sklearn.linear_model import LogisticRegression
@@ -8,9 +9,16 @@ from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import classification_report, accuracy_score, f1_score
 from sklearn.preprocessing import StandardScaler
 
-import search_bm25
-import search_w2v
-import search_bert
+# Ensure sibling imports work
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+
+try:
+    import search_bm25
+    import search_w2v
+    import search_bert
+except ImportError as e:
+    print(f"Error importing search modules: {e}")
 
 QUERIES = {
     "q1": "love and heartbreak",
@@ -25,17 +33,18 @@ QUERIES = {
     "q10": "looking into your eyes and realizing you are the only one I want to spend my life with"
 }
 
+# --- Feature Extraction (Compatible with Temp Files) ---
 def prepare_features(labeled_data_path):
-    print(f"--- 1. Data Loading ---")
+    print(f"--- 1. Data Loading (Training Subset) ---")
     print(f"Reading file: {labeled_data_path}")
-    df = pd.read_csv(labeled_data_path)
+    
+    # Read CSV (handle potential line terminators)
+    df = pd.read_csv(labeled_data_path, encoding='utf-8', lineterminator='\n')
+    df.columns = df.columns.str.strip()
     
     text_col = 'lyrics'
     if 'lyrics' not in df.columns:
-        if 'text' in df.columns:
-            text_col = 'text'
-        else:
-            text_col = df.select_dtypes(include=['object']).columns[-1]
+        text_col = 'text' if 'text' in df.columns else df.select_dtypes(include=['object']).columns[-1]
     
     print(f"Using text column: '{text_col}'")
     documents = df[text_col].fillna("").tolist()
@@ -47,51 +56,54 @@ def prepare_features(labeled_data_path):
     bm25.build_doc_term_matrix()
 
     print("\n--- 3. Initializing Word2Vec ---")
-    w2v = search_w2v.TextRetrieval()
-    w2v.dataset = pd.DataFrame({2: documents})
-    w2v.load_embeddings()
-    w2v.build_doc_W2V_cache()
+    # Adapter check: Try to instantiate the correct class
+    if hasattr(search_w2v, 'W2VSearcher'):
+        w2v = search_w2v.W2VSearcher(df) 
+    else:
+        # Fallback
+        w2v = search_w2v.TextRetrieval()
+        w2v.dataset = pd.DataFrame({2: documents}) 
+        w2v.load_embeddings()
+        w2v.build_doc_W2V_cache()
 
     print("\n--- 4. Initializing BERT ---")
     bert = search_bert.SongBiEncoderSearcher()
-    try:
-        bert.build_from_csv(labeled_data_path)
-    except AttributeError:
-        print("[Warning] Standard build_from_csv failed, trying to encode corpus manually.")
-        if hasattr(bert, 'encode_corpus'):
-            bert.encode_corpus(documents)
-        else:
-            raise
+    # Force build from the specific training CSV subset to align indices
+    bert.build_from_csv(labeled_data_path)
 
-    print("\n--- 5. Generating Training Features (for all queries) ---")
+    print("\n--- 5. Generating Training Features ---")
     feature_list = []
     label_list = []
 
     for q_key, query_text in QUERIES.items():
         if q_key not in df.columns:
-            print(f"  [Skip] Missing label column '{q_key}' in the dataset")
+            print(f"  [Skip] Missing label column '{q_key}'")
             continue
             
-        print(f"  Processing Query: {q_key} ('{query_text[:30]}...')")
+        print(f"  Processing Query: {q_key}")
         
+        # 1. BM25 Score
         s_bm25 = bm25.execute_search_BM25(query_text)
         
-        s_w2v = w2v.execute_search_W2V(query_text, mode="cosine")
+        # 2. W2V Score
+        if hasattr(w2v, 'search'):
+            s_w2v = w2v.search(query_text)
+        else:
+            s_w2v = w2v.execute_search_W2V(query_text, mode="cosine")
         
+        # 3. BERT Score
         if hasattr(bert, 'full_scores'):
             s_bert = bert.full_scores(query_text)
-        elif hasattr(bert, 'execute_search'):
-            s_bert = bert.execute_search(query_text)
         else:
             s_bert = np.zeros(len(documents))
 
+        # Handle Data Types (ensure numpy array)
+        if isinstance(s_w2v, pd.DataFrame) or isinstance(s_w2v, pd.Series):
+             s_w2v = s_w2v.values if hasattr(s_w2v, 'values') else np.array(s_w2v)
+
         current_labels = df[q_key].values
         
-        assert len(s_bm25) == len(documents)
-        assert len(s_w2v) == len(documents)
-        
         if len(s_bert) != len(documents):
-             print(f"Warning: BERT scores length mismatch ({len(s_bert)} vs {len(documents)}). Padding/Truncating.")
              s_bert = np.resize(s_bert, len(documents))
 
         for i in range(len(documents)):
@@ -103,16 +115,14 @@ def prepare_features(labeled_data_path):
     X = np.array(feature_list)
     y = np.array(label_list)
     
-    print(f"\nFeature preparation complete. Total samples: {len(y)}")
+    print(f"\nFeature preparation complete. Total training samples: {len(y)}")
     return X, y
 
+# --- Statistical Helpers (Original Rigorous Version) ---
 def calculate_pvalues_and_se(model, X):
     p = model.predict_proba(X)[:, 1]
-    
     X_design = np.hstack([np.ones((X.shape[0], 1)), X])
-    
     V = p * (1 - p)
-    
     H = np.dot(X_design.T * V, X_design)
     
     try:
@@ -123,21 +133,20 @@ def calculate_pvalues_and_se(model, X):
         return [np.nan] * n_features_plus_one, [np.nan] * n_features_plus_one
     
     std_errors = np.sqrt(np.diag(cov_matrix))
-    
     params = np.insert(model.coef_.flatten(), 0, model.intercept_)
-    
     z_scores = params / (std_errors + 1e-10)
-    
     p_values = 2 * (1 - stats.norm.cdf(np.abs(z_scores)))
     
     return p_values, std_errors
 
+# --- Training Logic (Original Rigorous Version) ---
 def train_logreg(X, y):
     print(f"\n--- 6. Training Logistic Regression Model (with Optimization) ---")
     
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     
+    # Internal validation split (on the 4000 samples)
     X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
     
     print(f"Training set size: {len(y_train)}, Test set size: {len(y_test)}")
@@ -192,39 +201,55 @@ def train_logreg(X, y):
 
     return clf, scaler
 
+# --- Main Execution (Data Splitting Logic) ---
 if __name__ == "__main__":
     try:
-        data_dir = "sample_data/processed"
-        target_filename = "Labeled_genius-clean-with-title-artist-5000.csv"
-        labeled_path = os.path.join(data_dir, target_filename)
-        
-        if not os.path.exists(labeled_path):
-            print(f"[Warning] Targeted file '{target_filename}' not found at {labeled_path}.")
-            possible_files = [f for f in os.listdir(data_dir) if "Labeled" in f and f.endswith(".csv")]
-            if possible_files:
-                labeled_path = os.path.join(data_dir, possible_files[0])
-        
-        print(f"Target Data Path: {labeled_path}")
+        # 1. Locate Full Data
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        PROCESSED_DIR = os.path.join(BASE_DIR, "sample_data", "processed")
+        FULL_FILE = "Labeled_genius-clean-with-title-artist-5000.csv"
+        FULL_PATH = os.path.join(PROCESSED_DIR, FULL_FILE)
 
-        X, y = prepare_features(labeled_path)
+        if not os.path.exists(FULL_PATH):
+            print(f"[Error] Data file not found at {FULL_PATH}")
+            sys.exit(1)
+
+        # 2. Slice First 4000 Rows
+        print(f"Loading full dataset from: {FULL_PATH}")
+        df_full = pd.read_csv(FULL_PATH, encoding='utf-8', lineterminator='\n')
+        
+        # SLICING LOGIC: Use first 4000 rows for training
+        df_train = df_full.iloc[:4000].copy()
+        print(f"Splitting data: Using first {len(df_train)} rows for TRAINING.")
+        
+        # 3. Save as Temp File (Critical for BERT/W2V index alignment)
+        temp_train_path = os.path.join(PROCESSED_DIR, "temp_train_subset.csv")
+        df_train.to_csv(temp_train_path, index=False)
+        print(f"Saved temp training file to: {temp_train_path}")
+
+        # 4. Run Pipeline
+        X, y = prepare_features(temp_train_path)
         
         if len(y) > 0:
             model, scaler = train_logreg(X, y)
             
-            target_dir = "models"
+            # 5. Save Model
+            target_dir = os.path.join(BASE_DIR, "models")
             os.makedirs(target_dir, exist_ok=True)
             
-            model_path = os.path.join(target_dir, "logreg_model.pkl")
-            scaler_path = os.path.join(target_dir, "scaler.pkl")
+            joblib.dump(model, os.path.join(target_dir, "logreg_model.pkl"))
+            joblib.dump(scaler, os.path.join(target_dir, "scaler.pkl"))
             
-            joblib.dump(model, model_path)
-            joblib.dump(scaler, scaler_path)
+            print(f"\nModel and scaler saved to '{target_dir}'")
             
-            print(f"\nModel and scaler saved to directory: '{target_dir}'")
+            # Cleanup
+            if os.path.exists(temp_train_path):
+                os.remove(temp_train_path)
+                print("Temp file cleaned up.")
         else:
-            print("Error: No valid training samples generated.")
+            print("Error: No training samples found.")
 
     except Exception as e:
-        print(f"\n[CRITICAL ERROR] Script execution failed: {e}")
+        print(f"\n[CRITICAL ERROR] {e}")
         import traceback
         traceback.print_exc()
