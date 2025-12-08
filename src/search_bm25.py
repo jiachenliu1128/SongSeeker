@@ -48,48 +48,86 @@ class TextRetrieval():
         return processed
 
     def build_vocabulary(self):
-        print("Building vocabulary...", end='\r')
+        print("Building vocabulary...                        ", end='\r')
         all_words = [word for doc in self.processed_docs for word in doc]
         self.vocab = sorted(list(set(all_words)))
+        # Fast term -> index lookup
+        self.vocab_index = {term: i for i, term in enumerate(self.vocab)}
 
     def build_doc_term_matrix(self):
-        matrix = []
-        for doc in self.processed_docs:
-            print(f"Building doc-term matrix for document {len(matrix)+1}/{len(self.processed_docs)}", end='\r')
+        """
+        Build a sparse document-term matrix.
+
+        Old version was O(num_docs * vocab_size) because it iterated over the
+        full vocabulary for every document. This version is O(total_tokens)
+        and stores counts in a CSR sparse matrix.
+        """
+        rows = []
+        cols = []
+        data = []
+
+        for doc_idx, doc in enumerate(self.processed_docs):
+            print(
+                f"Building doc-term matrix for document {doc_idx+1}/{len(self.processed_docs)}",
+                end='\r',
+            )
             doc_counts = Counter(doc)
-            term_counts = [doc_counts.get(word, 0) for word in self.vocab]
-            matrix.append(term_counts)
-        self.doc_term_matrix = np.array(matrix)
+            for term, count in doc_counts.items():
+                idx = self.vocab_index.get(term)
+                if idx is None:
+                    continue
+                rows.append(doc_idx)
+                cols.append(idx)
+                data.append(count)
+
+        n_docs = len(self.processed_docs)
+        n_terms = len(self.vocab)
+        self.doc_term_matrix = sp.csr_matrix(
+            (data, (rows, cols)), shape=(n_docs, n_terms), dtype=np.int32
+        )
 
     def execute_search_BM25(self, query, k1=1.5, b=0.75):
+        """
+        Compute BM25 scores for a query using the sparse doc-term matrix.
+        """
         query_tokens = self.preprocess_docs([query])[0]
-        doc_lengths = self.doc_term_matrix.sum(axis=1)
-        avg_doc_length = np.mean(doc_lengths)
-        num_docs = len(self.doc_term_matrix)
-        scores = np.zeros(num_docs)
+
+        # doc_lengths: (n_docs,) dense vector
+        doc_lengths = np.asarray(self.doc_term_matrix.sum(axis=1)).ravel()
+        avg_doc_length = float(doc_lengths.mean()) if len(doc_lengths) > 0 else 0.0
+        num_docs = self.doc_term_matrix.shape[0]
+        scores = np.zeros(num_docs, dtype=np.float64)
 
         for term in query_tokens:
-            if term in self.vocab:
-                term_idx = self.vocab.index(term)
-                df = np.count_nonzero(self.doc_term_matrix[:, term_idx])
-                idf = math.log((num_docs - df + 0.5) / (df + 0.5) + 1)
-                tf = self.doc_term_matrix[:, term_idx]
-                numerator = tf * (k1 + 1)
-                denominator = tf + k1 * (1 - b + b * (doc_lengths / avg_doc_length))
-                scores += idf * (numerator / denominator)
+            term_idx = self.vocab_index.get(term)
+            if term_idx is None:
+                continue
+
+            # tf is a sparse column; convert to dense 1D
+            tf_col = self.doc_term_matrix[:, term_idx].toarray().ravel()
+            df = np.count_nonzero(tf_col)
+            if df == 0:
+                continue
+
+            idf = math.log((num_docs - df + 0.5) / (df + 0.5) + 1)
+            numerator = tf_col * (k1 + 1.0)
+            denominator = tf_col + k1 * (1.0 - b + b * (doc_lengths / (avg_doc_length + 1e-9)))
+            scores += idf * (numerator / (denominator + 1e-9))
+
         return scores
     
     def save_cache(self, cache_dir: str):
+        print(f"Saving cache to {cache_dir}...                                ")
         os.makedirs(cache_dir, exist_ok=True)
         # tokens, vocab, doc lengths, etc.
         with open(os.path.join(cache_dir, "bm25_meta.pkl"), "wb") as f:
             pickle.dump(
                 {
                     "processed_docs": self.processed_docs,
-                    "vocabulary": self.vocabulary,
-                    "idf": self.idf,
-                    "doc_len": self.doc_len,
-                    "avgdl": self.avgdl,
+                    "vocab": self.vocab,
+                    # "idf": self.idf,
+                    # "doc_len": self.doc_len,
+                    # "avgdl": self.avgdl,
                 },
                 f,
             )
@@ -107,10 +145,10 @@ class TextRetrieval():
         with open(meta_path, "rb") as f:
             meta = pickle.load(f)
         self.processed_docs = meta["processed_docs"]
-        self.vocabulary = meta["vocabulary"]
-        self.idf = meta["idf"]
-        self.doc_len = meta["doc_len"]
-        self.avgdl = meta["avgdl"]
+        self.vocab = meta["vocab"]
+        # self.idf = meta["idf"]
+        # self.doc_len = meta["doc_len"]
+        # self.avgdl = meta["avgdl"]
 
         self.doc_term_matrix = sp.load_npz(dtm_path)
         return True  # cache hit

@@ -113,6 +113,7 @@ class SongBiEncoderSearcher:
         
         
     def save_cache(self, cache_dir: str):
+        print(f"Saving cache to {cache_dir}...")
         os.makedirs(cache_dir, exist_ok=True)
         np.save(os.path.join(cache_dir, "bert_doc_embeddings.npy"), self.doc_embs)
 
