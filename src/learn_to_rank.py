@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import yaml
 import os
 import joblib
 from scipy import stats
@@ -26,7 +25,7 @@ QUERIES = {
     "q10": "looking into your eyes and realizing you are the only one I want to spend my life with"
 }
 
-def prepare_features(labeled_data_path, config):
+def prepare_features(labeled_data_path):
     print(f"--- 1. Data Loading ---")
     print(f"Reading file: {labeled_data_path}")
     df = pd.read_csv(labeled_data_path)
@@ -195,11 +194,7 @@ def train_logreg(X, y):
 
 if __name__ == "__main__":
     try:
-        with open("config.yaml", 'r') as f:
-            config = yaml.safe_load(f)
-        
-        data_dir = os.path.dirname(config['data']['processed'])
-        
+        data_dir = "sample_data/processed"
         target_filename = "Labeled_genius-clean-with-title-artist-5000.csv"
         labeled_path = os.path.join(data_dir, target_filename)
         
@@ -208,12 +203,10 @@ if __name__ == "__main__":
             possible_files = [f for f in os.listdir(data_dir) if "Labeled" in f and f.endswith(".csv")]
             if possible_files:
                 labeled_path = os.path.join(data_dir, possible_files[0])
-            else:
-                labeled_path = config['data']['processed']
         
         print(f"Target Data Path: {labeled_path}")
 
-        X, y = prepare_features(labeled_path, config)
+        X, y = prepare_features(labeled_path)
         
         if len(y) > 0:
             model, scaler = train_logreg(X, y)

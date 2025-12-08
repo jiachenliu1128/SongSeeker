@@ -21,12 +21,12 @@ class SongBiEncoderSearcher:
     def __init__(
         self,
         model_name: str = "all-MiniLM-L6-v2",
-        emb_path: str = "./cache/bert_song_embeddings.npy",
-        id_path: str = "./cache/bert_song_ids.npy"
+        # emb_path: str = "./cache/bert_song_embeddings.npy",
+        # id_path: str = "./cache/bert_song_ids.npy"
     ):
         self.model_name = model_name
-        self.emb_path = emb_path
-        self.id_path = id_path
+        # self.emb_path = emb_path
+        # self.id_path = id_path
 
         self.model = SentenceTransformer(model_name)
         print(f"Model running on device: {self.model.device}")
@@ -93,39 +93,52 @@ class SongBiEncoderSearcher:
 
         # Finish stacking
         doc_embs = np.vstack(all_embs).astype("float32")
-        song_ids = np.array(all_ids)
+        # song_ids = np.array(all_ids)
 
         # Normalize for cosine similarity
         faiss.normalize_L2(doc_embs)
 
         # Save to disk
-        if not os.path.exists(os.path.dirname(self.emb_path)):
-            os.makedirs(os.path.dirname(self.emb_path))
-        if not os.path.exists(os.path.dirname(self.id_path)):
-            os.makedirs(os.path.dirname(self.id_path))
-        np.save(self.emb_path, doc_embs)
-        np.save(self.id_path, song_ids)
+        # if not os.path.exists(os.path.dirname(self.emb_path)):
+        #     os.makedirs(os.path.dirname(self.emb_path))
+        # if not os.path.exists(os.path.dirname(self.id_path)):
+        #     os.makedirs(os.path.dirname(self.id_path))
+        # np.save(self.emb_path, doc_embs)
+        # np.save(self.id_path, song_ids)
 
         # Store in memory
         self.doc_embs = doc_embs
-        self.song_ids = song_ids
+        # self.song_ids = song_ids
+        
+        
+        
+    def save_cache(self, cache_dir: str):
+        os.makedirs(cache_dir, exist_ok=True)
+        np.save(os.path.join(cache_dir, "bert_doc_embeddings.npy"), self.doc_embs)
+
+    def load_cache(self, cache_dir: str):
+        path = os.path.join(cache_dir, "bert_doc_embeddings.npy")
+        if not os.path.exists(path):
+            return False
+        self.doc_embs = np.load(path)
+        return True
             
             
             
             
 
-    # ------------------------------------------------------------------
-    # Loading stuff back
-    # ------------------------------------------------------------------
-    def _ensure_embs_loaded(self):
-        if self.doc_embs is None:
-            if not os.path.exists(self.emb_path):
-                raise FileNotFoundError(f"Embedding file not found: {self.emb_path}")
-            self.doc_embs = np.load(self.emb_path)
-        if self.song_ids is None:
-            if not os.path.exists(self.id_path):
-                raise FileNotFoundError(f"ID file not found: {self.id_path}")
-            self.song_ids = np.load(self.id_path)
+    # # ------------------------------------------------------------------
+    # # Loading stuff back
+    # # ------------------------------------------------------------------
+    # def _ensure_embs_loaded(self):
+    #     if self.doc_embs is None:
+    #         if not os.path.exists(self.emb_path):
+    #             raise FileNotFoundError(f"Embedding file not found: {self.emb_path}")
+    #         self.doc_embs = np.load(self.emb_path)
+    #     if self.song_ids is None:
+    #         if not os.path.exists(self.id_path):
+    #             raise FileNotFoundError(f"ID file not found: {self.id_path}")
+    #         self.song_ids = np.load(self.id_path)
         
         
         
@@ -143,7 +156,7 @@ class SongBiEncoderSearcher:
                     scores[i] = similarity between query and document i
                                (same order as embeddings / song_ids)
         """
-        self._ensure_embs_loaded()
+        # self._ensure_embs_loaded()
 
         # Encode query
         q_emb = self.model.encode([query], convert_to_numpy=True).astype("float32")
@@ -160,10 +173,13 @@ if __name__ == "__main__":
     # Load configuration
     with open("config.yaml", 'r') as f:
         config = yaml.safe_load(f)
-    data_path = config['data']['processed']
+    model = config['bert']['model']
+    
+    # Paths
+    data_path = "data/processed/clean-with-title-artist-1000000.csv"
     
     # Example usage
-    searcher = SongBiEncoderSearcher()
+    searcher = SongBiEncoderSearcher(model_name=model)
     searcher.build_from_csv(data_path)
     
     query = "love and heartbreak"

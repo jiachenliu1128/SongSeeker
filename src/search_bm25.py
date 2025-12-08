@@ -1,11 +1,11 @@
 import numpy as np
 import pandas as pd
-import re
 from collections import Counter
 import math
 from nltk.corpus import stopwords
 import nltk
-import yaml
+import pickle
+import scipy.sparse as sp
 
 # Download stopwords if not already downloaded
 try:
@@ -69,6 +69,42 @@ class TextRetrieval():
                 denominator = tf + k1 * (1 - b + b * (doc_lengths / avg_doc_length))
                 scores += idf * (numerator / denominator)
         return scores
+    
+    def save_cache(self, cache_dir: str):
+        os.makedirs(cache_dir, exist_ok=True)
+        # tokens, vocab, doc lengths, etc.
+        with open(os.path.join(cache_dir, "bm25_meta.pkl"), "wb") as f:
+            pickle.dump(
+                {
+                    "processed_docs": self.processed_docs,
+                    "vocabulary": self.vocabulary,
+                    "idf": self.idf,
+                    "doc_len": self.doc_len,
+                    "avgdl": self.avgdl,
+                },
+                f,
+            )
+        sp.save_npz(
+            os.path.join(cache_dir, "bm25_doc_term.npz"),
+            self.doc_term_matrix,
+        )
+
+    def load_cache(self, cache_dir: str):
+        meta_path = os.path.join(cache_dir, "bm25_meta.pkl")
+        dtm_path = os.path.join(cache_dir, "bm25_doc_term.npz")
+        if not (os.path.exists(meta_path) and os.path.exists(dtm_path)):
+            return False  # cache miss
+
+        with open(meta_path, "rb") as f:
+            meta = pickle.load(f)
+        self.processed_docs = meta["processed_docs"]
+        self.vocabulary = meta["vocabulary"]
+        self.idf = meta["idf"]
+        self.doc_len = meta["doc_len"]
+        self.avgdl = meta["avgdl"]
+
+        self.doc_term_matrix = sp.load_npz(dtm_path)
+        return True  # cache hit
 
 def search_songs(query, tr, dataset):
     relevance_docs = tr.execute_search_BM25(query)
@@ -81,13 +117,11 @@ def search_songs(query, tr, dataset):
 
 if __name__ == "__main__":
     try:
-        # Load configuration
-        with open("config.yaml", 'r') as f:
-            config = yaml.safe_load(f)
-        data_path = config['data']['processed']
-
+        # data_path
+        data_path = "sample_data/processed/genius-clean-with-title-artist-5000.csv"
+        
+        # Load dataset
         dataset = pd.read_csv(data_path)
-
         tr = TextRetrieval()
 
         print("Preprocessing the dataset...")

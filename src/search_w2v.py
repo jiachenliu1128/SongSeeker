@@ -15,6 +15,7 @@ import sys
 import numpy as np
 import pandas as pd
 import nltk
+import pickle
 from nltk.corpus import stopwords
 import yaml
 from gensim.scripts.glove2word2vec import glove2word2vec
@@ -24,8 +25,10 @@ from gensim.models import KeyedVectors
 # Read config
 with open("config.yaml", 'r') as f:
     config = yaml.safe_load(f)
-DATA_PATH = config['data']['processed']
 W2V_MODEL = config['w2v']['model']
+
+# Data paths
+DATA_PATH = "data/processed/clean-with-title-artist-1000000.csv"
 
 
 # =========================
@@ -179,30 +182,49 @@ class TextRetrieval():
         mat = np.vstack([self.kv.get_vector(w) for w in in_vocab]).astype(np.float32)
         return mat
 
-    def build_doc_W2V_cache(self, max_doc_tokens=200):
-        """
-        Cache doc matrices and mean vectors.
-        Fix duplicate append bug: do NOT append into self.docs_tokens again in loop.
+    def build_doc_W2V_cache(self, max_doc_tokens=200, keep_full_mats: bool = False):
+        """Cache per-document mean vectors, and optionally full matrices.
+
+        Parameters
+        ----------
+        max_doc_tokens : int
+            Maximum number of in-vocabulary tokens per document to use when
+            computing the cache. If > 0, documents are truncated to at most
+            this many tokens.
+        keep_full_mats : bool
+            If True, store the full (m_i, dim) matrix for each document in
+            ``self.docs_vecs`` so that avg-LL scoring can be used.
+            If False (recommended for large corpora), only ``self.docs_mean``
+            is populated and ``self.docs_vecs`` is set to None to save memory.
         """
         docs = self.dataset[2].tolist()
         self.docs_tokens = [str(d).split() for d in docs]
-        self.docs_vecs = []
+
+        # Initialize caches
         self.docs_mean = np.zeros((len(docs), self.dim), dtype=np.float32)
+        self.docs_vecs = [] if keep_full_mats else None
 
         for i, tokens in enumerate(self.docs_tokens):
+            print(f"W2V processing doc {i+1}/{len(docs)}", end='\r')
             in_vocab = [w for w in tokens if w in self.kv.key_to_index]
             if max_doc_tokens and len(in_vocab) > max_doc_tokens:
                 in_vocab = in_vocab[:max_doc_tokens]
 
             if not in_vocab:
-                self.docs_vecs.append(np.zeros((0, self.dim), dtype=np.float32))
+                # docs_mean row stays zeros; optionally store an empty matrix
+                if keep_full_mats:
+                    self.docs_vecs.append(np.zeros((0, self.dim), dtype=np.float32))
             else:
                 mat = np.vstack([self.kv.get_vector(w) for w in in_vocab]).astype(np.float32)
-                self.docs_vecs.append(mat)
+                if keep_full_mats:
+                    self.docs_vecs.append(mat)
                 self.docs_mean[i] = mat.mean(axis=0)
 
-        non_empty = sum(1 for m in self.docs_vecs if m.shape[0] > 0)
-        print(f"[cache] docs={len(docs)}, dim={self.dim}, non_empty={non_empty}")
+        if keep_full_mats:
+            non_empty = sum(1 for m in self.docs_vecs if m.shape[0] > 0)
+            print(f"[cache] docs={len(docs)}, dim={self.dim}, non_empty={non_empty}")
+        else:
+            print(f"[cache] docs={len(docs)}, dim={self.dim}, full mats disabled (keep_full_mats=False)")
 
     # ---------- Scoring ----------
     def _clean_query(self, q: str) -> str:
@@ -243,16 +265,67 @@ class TextRetrieval():
         return sims.astype(np.float32)
 
     def execute_search_W2V(self, query: str, mode: str = "avg_ll") -> np.ndarray:
-        """
-        mode in {"avg_ll", "cosine"}
+        """Compute retrieval scores for all documents.
+
+        Parameters
+        ----------
+        query : str
+            Raw query string.
+        mode : {"avg_ll", "cosine"}
+            Scoring mode. "cosine" uses only ``self.docs_mean`` (memory-light).
+            "avg_ll" additionally requires ``self.docs_vecs`` to be populated
+            (set ``keep_full_mats=True`` when building the cache).
         """
         n = self.dataset.shape[0]
         if mode == "cosine":
             return self.w2v_cosine_scores_batch(query)
+
+        if self.docs_vecs is None:
+            raise RuntimeError(
+                "avg_ll mode requested but docs_vecs is None. "
+                "Rebuild the cache with keep_full_mats=True, or use mode='cosine'."
+            )
+
         scores = np.zeros(n, dtype=np.float32)
         for i in range(n):
             scores[i] = self.w2v_avgll_score(query, i)
         return scores
+    
+    
+    def save_cache(self, cache_dir: str):
+        os.makedirs(cache_dir, exist_ok=True)
+        # mean vectors
+        np.save(os.path.join(cache_dir, "w2v_docs_mean.npy"), self.docs_mean)
+        # tokens (optional but often useful)
+        with open(os.path.join(cache_dir, "w2v_docs_tokens.pkl"), "wb") as f:
+            pickle.dump(self.docs_tokens, f)
+        # full matrices (only if you used keep_full_mats=True)
+        if self.docs_vecs is not None:
+            with open(os.path.join(cache_dir, "w2v_docs_vecs.pkl"), "wb") as f:
+                pickle.dump(self.docs_vecs, f)
+
+    def load_cache(self, cache_dir: str, expect_full_mats: bool = False):
+        mean_path = os.path.join(cache_dir, "w2v_docs_mean.npy")
+        tokens_path = os.path.join(cache_dir, "w2v_docs_tokens.pkl")
+        vecs_path = os.path.join(cache_dir, "w2v_docs_vecs.pkl")
+
+        if not (os.path.exists(mean_path) and os.path.exists(tokens_path)):
+            return False
+
+        self.docs_mean = np.load(mean_path)
+        with open(tokens_path, "rb") as f:
+            self.docs_tokens = pickle.load(f)
+
+        if expect_full_mats:
+            if not os.path.exists(vecs_path):
+                return False
+            with open(vecs_path, "rb") as f:
+                self.docs_vecs = pickle.load(f)
+        else:
+            self.docs_vecs = None
+
+        return True
+    
 
 # ---------- Pretty printing ----------
 def print_top_bottom_with_meta(scores: np.ndarray, meta: dict, k: int = 5):
@@ -308,7 +381,9 @@ def main_search():
     tr.alpha = 1.0  # try 1.0~3.0 for avg-LL sharpness
 
     # 3) Build per-document cache
-    tr.build_doc_W2V_cache(max_doc_tokens=200)
+    # For large corpora, avoid storing full per-document matrices to save memory.
+    # If you really need avg-LL scoring, call with keep_full_mats=True instead.
+    tr.build_doc_W2V_cache(max_doc_tokens=200, keep_full_mats=False)
 
     # 4) Run some demo queries (lyrics-y)
     queries = [
@@ -317,12 +392,12 @@ def main_search():
         "rain city night lonely"
     ]
 
-    print("#########\nResults for W2V (avg_log_likelihood)")
-    for q in queries:
-        print("QUERY:", q)
-        scores = tr.execute_search_W2V(q, mode="avg_ll")
-        print_top_bottom_with_meta(scores, tr.meta)
-        print()
+    # print("#########\nResults for W2V (avg_log_likelihood)")
+    # for q in queries:
+    #     print("QUERY:", q)
+    #     scores = tr.execute_search_W2V(q, mode="avg_ll")
+    #     print_top_bottom_with_meta(scores, tr.meta)
+    #     print()
 
     print("#########\nResults for W2V (cosine baseline)")
     for q in queries:

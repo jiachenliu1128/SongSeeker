@@ -1,21 +1,19 @@
 import sys, re, csv
 import pandas as pd
-import yaml
 
 try:
     csv.field_size_limit(sys.maxsize)
 except OverflowError:
     csv.field_size_limit(2**31 - 1)
 
-with open("config.yaml", 'r') as f:
-    config = yaml.safe_load(f)
-raw_path = config['data']['raw']
-processed_path = config['data']['processed']
+nrows = 1000000
+raw_path = 'data/raw/song_lyrics.csv'
+processed_path = f'data/processed/clean-with-title-artist-{nrows}.csv'
 
 df = pd.read_csv(
     raw_path,
     sep=',',
-    # nrows=5000,
+    nrows=nrows,
     quotechar='"',
     quoting=csv.QUOTE_MINIMAL,
     doublequote=True,
