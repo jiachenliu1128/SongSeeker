@@ -117,7 +117,7 @@ class TextRetrieval():
         return scores
     
     def save_cache(self, cache_dir: str):
-        print(f"Saving cache to {cache_dir}...")
+        print(f"Saving cache to {cache_dir}...                                ")
         os.makedirs(cache_dir, exist_ok=True)
         # tokens, vocab, doc lengths, etc.
         with open(os.path.join(cache_dir, "bm25_meta.pkl"), "wb") as f:
