@@ -6,6 +6,7 @@ from nltk.corpus import stopwords
 import nltk
 import pickle
 import scipy.sparse as sp
+import os
 
 # Download stopwords if not already downloaded
 try:
@@ -13,6 +14,9 @@ try:
 except LookupError:
     nltk.download('stopwords')
 manual_stopwords = set(stopwords.words('english'))
+
+
+
 
 # Text Retrieval class implementing BM25
 class TextRetrieval():
@@ -29,7 +33,10 @@ class TextRetrieval():
 
     def preprocess_docs(self, docs):
         processed = []
+        doc_count = 0
         for doc in docs:
+            print(f"Processing document {doc_count+1}/{len(docs)}", end='\r')
+            doc_count += 1
             if isinstance(doc, str):
                 doc = doc.strip().lower()
                 doc = ''.join(c for c in doc if c not in self.punctuations)
@@ -41,12 +48,14 @@ class TextRetrieval():
         return processed
 
     def build_vocabulary(self):
+        print("Building vocabulary...", end='\r')
         all_words = [word for doc in self.processed_docs for word in doc]
         self.vocab = sorted(list(set(all_words)))
 
     def build_doc_term_matrix(self):
         matrix = []
         for doc in self.processed_docs:
+            print(f"Building doc-term matrix for document {len(matrix)+1}/{len(self.processed_docs)}", end='\r')
             doc_counts = Counter(doc)
             term_counts = [doc_counts.get(word, 0) for word in self.vocab]
             matrix.append(term_counts)
@@ -106,6 +115,9 @@ class TextRetrieval():
         self.doc_term_matrix = sp.load_npz(dtm_path)
         return True  # cache hit
 
+
+
+
 def search_songs(query, tr, dataset):
     relevance_docs = tr.execute_search_BM25(query)
     top5_indices = np.argsort(relevance_docs)[-5:][::-1]
@@ -113,6 +125,9 @@ def search_songs(query, tr, dataset):
     print(f"\n--- Top 5 Songs for query: '{query}' ---")
     for i in top5_indices:
         print(f"Score: {relevance_docs[i]:.2f} -> Title: {dataset.iloc[i]['title']}")
+
+
+
 
 
 if __name__ == "__main__":

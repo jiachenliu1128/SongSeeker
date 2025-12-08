@@ -190,18 +190,6 @@ def main():
         description="Rank documents using learned LTR model (BM25 + W2V + BERT)."
     )
     parser.add_argument(
-        "--data_path",
-        type=str,
-        default="sample_data/processed/Labeled_genius-clean-with-title-artist-5000.csv",
-        help="Path to the CSV used as corpus.",
-    )
-    parser.add_argument(
-        "--model_dir",
-        type=str,
-        default="models",
-        help="Directory containing logreg_model.pkl and scaler.pkl",
-    )
-    parser.add_argument(
         "--top_k",
         type=int,
         default=10,
@@ -209,7 +197,8 @@ def main():
     )
     args = parser.parse_args()
 
-    ranker = LearnedRanker(args.data_path, model_dir=args.model_dir)
+    data_path = "data/processed/clean-with-title-artist-1000000.csv"
+    ranker = LearnedRanker(data_path)
 
     print("\nType a query to get ranked results (Ctrl+C or empty line to exit).")
     while True:

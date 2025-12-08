@@ -309,13 +309,16 @@ class TextRetrieval():
         tokens_path = os.path.join(cache_dir, "w2v_docs_tokens.pkl")
         vecs_path = os.path.join(cache_dir, "w2v_docs_vecs.pkl")
 
+        # Check existence
         if not (os.path.exists(mean_path) and os.path.exists(tokens_path)):
             return False
 
+        # Load mean vectors and tokens
         self.docs_mean = np.load(mean_path)
         with open(tokens_path, "rb") as f:
             self.docs_tokens = pickle.load(f)
 
+        # Load full matrices if expected
         if expect_full_mats:
             if not os.path.exists(vecs_path):
                 return False

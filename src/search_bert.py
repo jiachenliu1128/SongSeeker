@@ -33,8 +33,8 @@ class SongBiEncoderSearcher:
 
         # Lazy-loaded
         self.doc_embs: Optional[np.ndarray] = None  # (N, d)
-        self.song_ids: Optional[np.ndarray] = None  # (N,)
-        self.index: Optional[faiss.Index] = None
+        # self.song_ids: Optional[np.ndarray] = None  # (N,)
+        # self.index: Optional[faiss.Index] = None
 
 
 
