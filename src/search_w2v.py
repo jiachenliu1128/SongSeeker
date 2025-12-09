@@ -406,13 +406,6 @@ def main_search():
         "rain city night lonely"
     ]
 
-    # print("#########\nResults for W2V (avg_log_likelihood)")
-    # for q in queries:
-    #     print("QUERY:", q)
-    #     scores = tr.execute_search_W2V(q, mode="avg_ll")
-    #     print_top_bottom_with_meta(scores, tr.meta)
-    #     print()
-
     print("#########\nResults for W2V (cosine baseline)")
     for q in queries:
         print("QUERY:", q)

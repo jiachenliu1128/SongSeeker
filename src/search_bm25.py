@@ -185,13 +185,6 @@ if __name__ == "__main__":
         tr.save_cache("cache/bm25")
         print("Setup complete. You can now start searching.")
 
-        # while True:
-        #     query = input("\nEnter your search query (or type 'quit' to exit): ")
-        #     if query.lower() == 'quit':
-        #         print("Exiting...")
-        #         break
-        #     search_songs(query, tr, dataset)
-
     except FileNotFoundError:
         print(f"\n[ERROR] The file '{data_path}' was not found.")
         print("Please make sure your CSV file is in the right directory.")
