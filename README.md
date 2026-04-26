@@ -24,7 +24,7 @@ The `SongSeeker.ipynb` notebook contains the complete workflow for model trainin
 We have already preprocessed the dataset and created two subsets for the notebook:
 - `sample_data/processed/genius-clean-with-title-artist-10000.csv`: A subset of 10,000 rows for search evaluation.
 - `sample_data/processed/genius-clean-with-title-artist-5000.csv`: A labeled subset of 5,000 rows for training and evaluating the Learn to Rank model.
-The original dataset can be found at `https://www.kaggle.com/datasets/carlosgdcj/genius-song-lyrics-with-language-information` and all data processing scripts are located in the `src` directory.
+The original dataset can be found at `https://www.kaggle.com/datasets/carlosgdcj/genius-song-lyrics-with-language-information` and all data processing scripts are located in the `src` directory. Place raw data in the `data/raw` directory and run the scripts to generate the processed datasets.
 
 
 
